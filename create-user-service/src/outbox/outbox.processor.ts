@@ -14,14 +14,16 @@ export class OutboxProcessor {
 
   async processPendingMessages() {
     const repo = this.dataSource.getRepository(OutboxMessage);
-
     const messages = await repo.find({
       where: { status: 'PENDING' },
       take: 10,
     });
 
+    this.logger.log(`Found ${messages.length} pending messages`);
+
     for (const message of messages) {
       try {
+        this.logger.log(`Publishing message ${message.id}`);
         await this.publisher.publish({
           eventId: message.id,
           type: message.eventType,
@@ -30,11 +32,10 @@ export class OutboxProcessor {
 
         message.status = 'PUBLISHED';
         await repo.save(message);
+
+        this.logger.log(`Message ${message.id} published`);
       } catch (err) {
-        this.logger.error(
-          `Failed to publish outbox message ${message.id}`,
-          err,
-        );
+        this.logger.error(`Failed to publish ${message.id}`, err.stack);
       }
     }
   }

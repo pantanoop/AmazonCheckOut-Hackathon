@@ -18,8 +18,11 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
-    "dispatch": "ts-node src/bootstrap/dispatch.ts",
-    "handle": "ts-node src/bootstrap/consumer.ts"
+    "typeorm": "typeorm-ts-node-commonjs -d data-source.ts",
+    "migration:generate": "npm run typeorm -- migration:generate -n",
+    "migration:run": "npm run typeorm -- migration:run",
+    "migration:revert": "npm run typeorm -- migration:revert",
+    "consume": "ts-node -r tsconfig-paths/register src/cli/consume.ts consume"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",
@@ -30,6 +33,7 @@
     "@nestjs/typeorm": "^11.0.0",
     "amqplib": "^0.10.9",
     "dotenv": "^17.3.1",
+    "nest-commander": "^3.20.1",
     "pg": "^8.18.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",

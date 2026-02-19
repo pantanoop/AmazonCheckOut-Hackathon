@@ -21,7 +21,8 @@
     "typeorm": "typeorm-ts-node-commonjs -d data-source.ts",
     "migration:generate": "npm run typeorm -- migration:generate -n",
     "migration:run": "npm run typeorm -- migration:run",
-    "migration:revert": "npm run typeorm -- migration:revert"
+    "migration:revert": "npm run typeorm -- migration:revert",
+    "dispatch": "ts-node -r tsconfig-paths/register src/cli/bootstrap.ts dispatch"  
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",
@@ -30,6 +31,7 @@
     "@nestjs/platform-express": "^11.0.1",
     "@nestjs/typeorm": "^11.0.0",
     "amqplib": "^0.10.9",
+    "nest-commander": "^3.20.1",
     "pg": "^8.18.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",

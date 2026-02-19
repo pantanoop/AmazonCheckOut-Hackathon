@@ -1,16 +1,23 @@
-import { Entity, PrimaryColumn, Column, CreateDateColumn } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  Index,
+} from 'typeorm';
 
 @Entity('inbox_messages')
 export class InboxMessage {
-  @PrimaryColumn('uuid')
-  id: string;
+  @PrimaryGeneratedColumn()
+  id: number;
+
+  @Index({ unique: true })
+  @Column({ type: 'uuid' })
+  eventId: string;
 
   @Column()
   eventType: string;
 
   @Column('jsonb')
   payload: any;
-
-  @CreateDateColumn()
-  receivedAt: Date;
 }

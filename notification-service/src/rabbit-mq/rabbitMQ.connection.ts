@@ -1,36 +1,44 @@
 /* eslint-disable */
-
-import { Injectable, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import * as amqp from 'amqplib';
 
 @Injectable()
 export class RabbitMQConnection implements OnModuleDestroy {
-  private connection: amqp.Connection;
-  private channel: amqp.Channel;
-  private reconnecting = false;
+  private readonly logger = new Logger(RabbitMQConnection.name);
 
-  async getChannel(url: string): Promise<amqp.Channel> {
+  private connection: amqp.Connection | null = null;
+  private channel: amqp.Channel | null = null;
+  private connecting = false;
+
+  async getChannel(url: string): Promise<amqp.Channel | null> {
     if (this.channel) return this.channel;
+    if (this.connecting) return null;
 
-    this.connection = await amqp.connect(url);
+    this.connecting = true;
 
-    this.connection.on('close', () => this.reconnect(url));
-    this.connection.on('error', () => this.reconnect(url));
+    try {
+      this.logger.log('Connecting to RabbitMQ...');
+      this.connection = await amqp.connect(url);
 
-    this.channel = await this.connection.createChannel();
-    return this.channel;
+      this.connection.on('close', () => this.reset());
+      this.connection.on('error', () => this.reset());
+
+      this.channel = await this.connection.createChannel();
+      this.logger.log('RabbitMQ connected');
+
+      return this.channel;
+    } catch (err) {
+      this.logger.warn('RabbitMQ unavailable, retrying...');
+      this.reset();
+      return null;
+    } finally {
+      this.connecting = false;
+    }
   }
 
-  private async reconnect(url: string) {
-    if (this.reconnecting) return;
-    this.reconnecting = true;
-
-    setTimeout(async () => {
-      this.channel = null;
-      this.connection = null;
-      this.reconnecting = false;
-      await this.getChannel(url);
-    }, 2000);
+  private reset() {
+    this.channel = null;
+    this.connection = null;
   }
 
   async onModuleDestroy() {

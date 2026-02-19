@@ -5,52 +5,60 @@ import { RabbitMQConnection } from './rabbitMQ.connection';
 import { InboxMessage } from '../inbox/entities/inbox.entity';
 
 @Injectable()
-export class RabbitMQConsumer implements OnModuleInit {
+export class RabbitMQConsumer {
   private readonly logger = new Logger(RabbitMQConsumer.name);
+  private consuming = false;
 
   constructor(
     private readonly rabbit: RabbitMQConnection,
     private readonly dataSource: DataSource,
   ) {}
 
-  async onModuleInit() {
-    const channel = await this.rabbit.getChannel(process.env.RABBITMQ_URL!);
+  public async startConsumerLoop() {
+    while (!this.consuming) {
+      const channel = await this.rabbit.getChannel(process.env.RABBITMQ_URL!);
 
-    await channel.assertExchange('users.fanout', 'fanout', {
-      durable: true,
-    });
+      if (!channel) {
+        await this.sleep(3000);
+        continue;
+      }
 
-    const queue = await channel.assertQueue('notification_queue', {
-      durable: true,
-    });
+      await channel.assertExchange('users.fanout', 'fanout', { durable: true });
+      const queue = await channel.assertQueue('notification_queue', {
+        durable: true,
+      });
 
-    await channel.bindQueue(queue.queue, 'users.fanout', '');
+      await channel.bindQueue(queue.queue, 'users.fanout', '');
 
-    channel.consume(
-      queue.queue,
-      async (msg) => {
-        if (!msg) return;
+      channel.consume(
+        queue.queue,
+        async (msg) => {
+          if (!msg) return;
 
-        const content = JSON.parse(msg.content.toString());
+          try {
+            const event = JSON.parse(msg.content.toString());
+            await this.handleMessage(event);
+            channel.ack(msg);
+          } catch (err) {
+            this.logger.error('Processing failed', err);
+            channel.nack(msg, false, true);
+          }
+        },
+        { noAck: false },
+      );
 
-        try {
-          await this.handleMessage(content);
-          channel.ack(msg);
-        } catch (err) {
-          this.logger.error('Processing failed', err);
-          channel.nack(msg, false, true);
-        }
-      },
-      { noAck: false },
-    );
+      this.consuming = true;
+      this.logger.log('RabbitMQ consumer started');
+    }
   }
 
   private async handleMessage(event: any) {
+    console.log(event, 'event');
     await this.dataSource.transaction(async (manager) => {
       const inboxRepo = manager.getRepository(InboxMessage);
 
       const exists = await inboxRepo.findOne({
-        where: { id: event.eventId },
+        where: { eventId: event.eventId },
       });
 
       if (exists) {
@@ -59,14 +67,18 @@ export class RabbitMQConsumer implements OnModuleInit {
       }
 
       const inbox = inboxRepo.create({
-        id: event.eventId,
+        eventId: event.eventId,
         eventType: event.type,
         payload: event.payload,
       });
 
       await inboxRepo.save(inbox);
-
-      console.log('Notification Service received event:', event.payload);
+      this.logger.log('Event stored in inbox');
+      console.log('event', event);
     });
+  }
+
+  private sleep(ms: number) {
+    return new Promise((res) => setTimeout(res, ms));
   }
 }

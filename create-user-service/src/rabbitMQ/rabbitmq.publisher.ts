@@ -14,6 +14,12 @@ export class RabbitMQPublisher {
       durable: true,
     });
 
+    const queue = await channel.assertQueue('notification_queue', {
+      durable: true,
+    })
+
+    await channel.bindQueue(queue.queue, 'users.fanout', '');
+
     channel.publish('users.fanout', '', Buffer.from(JSON.stringify(event)), {
       persistent: true,
     });

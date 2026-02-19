@@ -1,3 +1,5 @@
+version: "3.9"
+
 services:
   rabbitmq:
     image: rabbitmq:3-management
@@ -10,68 +12,55 @@ services:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
 
-  postgres-create-user:
+  postgres:
     image: postgres:15
-    container_name: postgres-create-user
+    container_name: postgres
     restart: always
-    environment:
-      POSTGRES_USER: ${CREATE_USER_DB_USER}
-      POSTGRES_PASSWORD: ${CREATE_USER_DB_PASSWORD}
-      POSTGRES_DB: create_user_db
-    volumes:
-      - create-user-pgdata:/var/lib/postgresql/data
     ports:
       - "5433:5432"
-
-  postgres-notification:
-    image: postgres:15
-    container_name: postgres-notification
-    restart: always
     environment:
-      POSTGRES_USER: ${NOTIFICATION_DB_USER}
-      POSTGRES_PASSWORD: ${NOTIFICATION_DB_PASSWORD}
-      POSTGRES_DB: notification_db
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: postgres # default DB; services can create others
     volumes:
-      - notification-pgdata:/var/lib/postgresql/data
-    ports:
-      - "5434:5432"
+      - postgres-data:/var/lib/postgresql/data # persistent volume
 
   create-user-service:
     build:
       context: ./create-user-service
-    image: create-user
     container_name: create-user-service
+    restart: always
     depends_on:
-      - postgres-create-user
+      - postgres
       - rabbitmq
     ports:
       - "6000:6000"
     environment:
       PORT: 6000
-      DB_HOST: postgres-create-user
+      DB_HOST: postgres
       DB_PORT: 5432
-      DB_USERNAME: ${CREATE_USER_DB_USER}
-      DB_PASSWORD: ${CREATE_USER_DB_PASSWORD}
-      DB_DATABASE: create_user_db
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_DATABASE: create_user_db # this DB must exist or be auto-created by TypeORM
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
 
   notification-service:
     build:
       context: ./notification-service
-    image: notification-service
     container_name: notification-service
+    restart: always
     depends_on:
-      - postgres-notification
+      - postgres
       - rabbitmq
     ports:
       - "5000:5000"
     environment:
       PORT: 5000
-      DB_HOST: postgres-notification
+      DB_HOST: postgres
       DB_PORT: 5432
-      DB_USERNAME: ${NOTIFICATION_DB_USER}
-      DB_PASSWORD: ${NOTIFICATION_DB_PASSWORD}
-      DB_DATABASE: notification_db
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_DATABASE: notification_db # this DB must exist or be auto-created by TypeORM
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
 
   pgadmin:
@@ -84,9 +73,7 @@ services:
       PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL}
       PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD}
     depends_on:
-      - postgres-create-user
-      - postgres-notification
+      - postgres
 
 volumes:
-  create-user-pgdata:
-  notification-pgdata:
+  postgres-data:

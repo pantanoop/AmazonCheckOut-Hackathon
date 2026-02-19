@@ -20,7 +20,7 @@ export class OutboxTable1771240753081 implements MigrationInterface {
           },
           {
             name: 'eventType',
-            type: 'var char',
+            type: 'varchar',
             isNullable: false,
           },
           {
