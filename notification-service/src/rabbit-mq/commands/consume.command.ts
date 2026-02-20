@@ -3,7 +3,7 @@ import { RabbitMQConsumer } from '../rabbitMQ.consumer';
 
 @Command({
   name: 'consume',
-  description: 'Start RabbitMQ consumer',
+  description: 'Consume messages from RabbitMQ',
 })
 export class ConsumeCommand extends CommandRunner {
   constructor(private readonly consumer: RabbitMQConsumer) {
