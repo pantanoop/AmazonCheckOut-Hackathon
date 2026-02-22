@@ -23,12 +23,12 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: postgres
     volumes:
-      - postgres-data:/var/lib/postgresql/data # persistent volume
+      - postgres-data:/var/lib/postgresql/data
 
-  create-user-service:
+  sales-service:
     build:
-      context: ./create-user-service
-    container_name: create-user-service
+      context: ./sales
+    container_name: sales
     restart: always
     depends_on:
       - postgres
@@ -41,13 +41,13 @@ services:
       DB_PORT: 5432
       DB_USERNAME: ${DB_USERNAME}
       DB_PASSWORD: ${DB_PASSWORD}
-      DB_DATABASE: create_user_db
+      DB_DATABASE: sales_db
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
 
-  notification-service:
+  billing-service:
     build:
-      context: ./notification-service
-    container_name: notification-service
+      context: ./billing
+    container_name: billing-service
     restart: always
     depends_on:
       - postgres
@@ -55,12 +55,12 @@ services:
     ports:
       - "5000:5000"
     environment:
-      PORT: 5000
+      PORT: 000
       DB_HOST: postgres
       DB_PORT: 5432
       DB_USERNAME: ${DB_USERNAME}
       DB_PASSWORD: ${DB_PASSWORD}
-      DB_DATABASE: notification_db
+      DB_DATABASE: billing_db
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
 
   pgadmin:
