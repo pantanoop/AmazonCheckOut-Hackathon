@@ -51,22 +51,36 @@ export class OrderService {
       const orderRepo = manager.getRepository(Order);
       const outboxRepo = manager.getRepository(OutboxMessage);
 
-      const order = await orderRepo.findOne({
+      const existingOrder = await orderRepo.findOne({
         where: { orderId: input.orderId },
       });
 
-      if (!order) {
-        throw new NotFoundException('Order not found');
+      if (existingOrder) {
+        throw new BadRequestException('Order already exists');
       }
 
-      if (order.status !== 'PENDING') {
-        throw new BadRequestException(
-          `Order cannot be placed from status ${order.status}`,
-        );
-      }
+      // if (!order) {
+      //   throw new NotFoundException('Order not found');
+      // }
 
-      order.status = 'PLACED';
-      await orderRepo.save(order);
+      // if (order.status !== 'PENDING') {
+      //   throw new BadRequestException(
+      //     `Order cannot be placed from status ${order.status}`,
+      //   );
+      // }
+
+      // order.status = 'PLACED';
+      // await orderRepo.save(order);
+
+      const order = orderRepo.create({
+        orderId: input.orderId,
+        customerId: input.customerId,
+        products: input.products,
+        orderTotal: input.orderTotal,
+        status: 'PLACED',
+      });
+
+      orderRepo.save(order);
 
       const outbox = outboxRepo.create({
         id: uuidv4(),

@@ -13,5 +13,8 @@ export class InboxMessage {
   eventType: string;
 
   @Column()
+  handler: string;
+
+  @Column()
   status: string;
 }

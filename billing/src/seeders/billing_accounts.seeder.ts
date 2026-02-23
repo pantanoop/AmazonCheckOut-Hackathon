@@ -5,7 +5,8 @@ import { BillingAccount } from '../billing/entities/billing-account.entity';
 export default class BillingAccountSeeder implements Seeder {
   public async run(dataSource: DataSource): Promise<void> {
     const repository = dataSource.getRepository(BillingAccount);
-
+    console.log('Database:', dataSource.options.database);
+    // console.log('Host:', dataSource.options.);
     const count = await repository.count();
     if (count > 0) return;
 

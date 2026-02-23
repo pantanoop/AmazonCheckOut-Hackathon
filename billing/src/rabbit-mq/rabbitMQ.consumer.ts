@@ -1,10 +1,11 @@
 /* eslint-disable */
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
 import { RabbitMQConnection } from './rabbitMQ.connection';
+import { DataSource } from 'typeorm';
 import { InboxMessage } from '../inbox/inbox.entity';
 import { Order } from '../billing/entities/order.entity';
+import { OutboxMessage } from '../outbox/entities/outbox-table.entity';
+import { BillingAccount } from '../billing/entities/billing-account.entity';
 
 @Injectable()
 export class RabbitMQConsumer implements OnModuleInit {
@@ -12,9 +13,7 @@ export class RabbitMQConsumer implements OnModuleInit {
 
   constructor(
     private readonly rabbit: RabbitMQConnection,
-    @InjectRepository(InboxMessage)
-    private readonly inboxRepo: Repository<InboxMessage>,
-    private readonly orderRepo: Repository<Order>,
+    private readonly dataSource: DataSource,
   ) {}
 
   async onModuleInit() {
@@ -52,34 +51,80 @@ export class RabbitMQConsumer implements OnModuleInit {
     this.logger.log('Billing consumer started');
   }
 
-  private async handleMessage(event: any) {
+  private async handleMessage(event: {
+    eventId: string;
+    eventType: string;
+    payload: {
+      orderId: string;
+      orderTotal: number;
+      billingAccountId: string;
+    };
+  }) {
     const { eventId, eventType, payload } = event;
+    const channel = await this.rabbit.getChannel(process.env.RABBITMQ_URL!);
 
-    const exists = await this.inboxRepo.findOne({
-      where: { messageId: eventId },
+    await this.dataSource.transaction(async (manager) => {
+      const inboxRepo = manager.getRepository(InboxMessage);
+      const outboxRepo = manager.getRepository(OutboxMessage);
+      const orderRepo = manager.getRepository(Order);
+      const accountRepo = manager.getRepository(BillingAccount);
+
+      const alreadyProcessed = await inboxRepo.findOne({
+        where: { messageId: eventId },
+      });
+
+      if (alreadyProcessed) {
+        this.logger.warn(`Duplicate event ignored: ${eventId}`);
+        return;
+      }
+      const inbox = inboxRepo.create({
+        messageId: eventId,
+        eventType,
+        handler: 'handleMessageConsumer',
+        status: 'CONSUMED',
+      });
+
+      await inboxRepo.save(inbox);
+
+      const billingAccount = await accountRepo.findOne({
+        where: { billingAccountId: payload.billingAccountId },
+      });
+
+      if (!billingAccount || payload.orderTotal > billingAccount.balance) {
+        await outboxRepo.save(
+          outboxRepo.create({
+            id: eventId,
+            eventType: 'payment.failed',
+            status: 'PENDING',
+            messagePayload: {
+              messageId: eventId,
+              orderId: payload.orderId,
+              message: 'payment failed',
+            },
+          }),
+        );
+        return;
+      } else {
+        const order = orderRepo.create({
+          orderId: payload.orderId,
+          billingAccountId: payload.billingAccountId,
+        });
+
+        await orderRepo.save(order);
+
+        await outboxRepo.save(
+          outboxRepo.create({
+            id: eventId,
+            eventType: 'order.billed',
+            status: 'PENDING',
+            messagePayload: {
+              messageId: eventId,
+              orderId: payload.orderId,
+              message: 'order billed',
+            },
+          }),
+        );
+      }
     });
-
-    if (exists) {
-      this.logger.warn(`Duplicate event ignored: ${eventId}`);
-      return;
-    }
-
-    const inbox = this.inboxRepo.create({
-      messageId: eventId,
-      eventType,
-      handler: 'OrderPlacedHandler',
-      status: 'CONSUMED',
-    });
-
-    await this.inboxRepo.save(inbox);
-
-    const order = this.orderRepo.create({
-      orderId: payload.orderId,
-      billingAccountId: payload.billingAccountId,
-    });
-
-    await this.orderRepo.save(order);
-
-    this.logger.log(`OrderPlaced event stored: ${eventId}`);
   }
 }

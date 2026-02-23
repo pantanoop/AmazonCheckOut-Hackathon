@@ -22,7 +22,8 @@
     "migration:generate": "npm run typeorm -- migration:generate -n",
     "migration:run": "npm run typeorm -- migration:run",
     "migration:revert": "npm run typeorm -- migration:revert",
-    "dispatch": "ts-node -r tsconfig-paths/register src/cli/bootstrap.ts dispatch"
+    "dispatch": "ts-node -r tsconfig-paths/register src/cli/bootstrap.ts dispatch",
+    "consume": "ts-node -r tsconfig-paths/register src/cli/consume.ts consume"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",

@@ -24,7 +24,7 @@
     "migration:revert": "npm run typeorm -- migration:revert",
     "consume": "ts-node -r tsconfig-paths/register src/cli/consume.ts consume",
     "dispatch": "ts-node -r tsconfig-paths/register src/cli/bootstrap.ts dispatch",
-    "seed": "ts-node -r tsconfig-paths/register ./node_modules/typeorm-extension/bin/cli.js seed -d src/config/typeorm.config.ts"
+    "seed": "typeorm-extension seed:run -d data-source.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",

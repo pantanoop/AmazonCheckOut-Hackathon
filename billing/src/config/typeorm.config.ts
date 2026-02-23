@@ -2,6 +2,10 @@ import { DataSourceOptions } from 'typeorm';
 import { SeederOptions } from 'typeorm-extension';
 import * as dotenv from 'dotenv';
 import { join } from 'path';
+import { BillingAccount } from '../billing/entities/billing-account.entity';
+import { InboxMessage } from '../inbox/inbox.entity';
+import { OutboxMessage } from '../outbox/entities/outbox-table.entity';
+import { Order } from '../billing/entities/order.entity';
 
 dotenv.config();
 
@@ -14,11 +18,11 @@ export const typeOrmConfig: DataSourceOptions & SeederOptions = {
   password: process.env.DB_PASSWORD,
   database: process.env.DB_DATABASE,
 
-  entities: [join(__dirname, '..', '**', '*.entity.{ts,js}')],
+  entities: [Order, BillingAccount, InboxMessage, OutboxMessage],
 
-  migrations: [join(__dirname, '..', 'migrations', '*{.ts,.js}')],
+  migrations: [join(__dirname, '..', 'src', 'migrations', '*.{ts,js}')],
 
-  seeds: [join(__dirname, '..', 'seeders', '*{.ts,.js}')],
+  seeds: [join(__dirname, '..', 'src', 'seeders', '*.seeder.{ts,js}')],
 
   synchronize: false,
 };
