@@ -4,6 +4,7 @@ import { RabbitMQConnection } from './rabbitmq.connection';
 import { DataSource } from 'typeorm';
 import { InboxMessage } from '../inbox/inbox.entity';
 import { Order } from '../order/entities/order.entity';
+import { eventNames } from 'process';
 
 @Injectable()
 export class RabbitMQConsumer {
@@ -27,6 +28,7 @@ export class RabbitMQConsumer {
 
     await channel.bindQueue(queue.queue, 'ordering.events', 'payment.failed');
     await channel.bindQueue(queue.queue, 'ordering.events', 'order.billed');
+    await channel.bindQueue(queue.queue, 'ordering.events', 'order.shipped');
 
     channel.consume(
       queue.queue,
@@ -49,25 +51,26 @@ export class RabbitMQConsumer {
   }
 
   private async handleEvent(event: {
-    messageId: string;
+    eventId: string;
     eventType: string;
     orderId: string;
     message?: string;
   }) {
+    console.log('event in sales consumer', event);
     await this.dataSource.transaction(async (manager) => {
       const inboxRepo = manager.getRepository(InboxMessage);
 
       const alreadyProcessed = await inboxRepo.findOne({
-        where: { messageId: event.messageId },
+        where: { messageId: event.eventId, eventType: event.eventType },
       });
 
       if (alreadyProcessed) {
-        this.logger.warn(`Duplicate event ignored: ${event.messageId}`);
+        this.logger.warn(`Duplicate event ignored: ${event.eventId}`);
         return;
       }
       await inboxRepo.save(
         inboxRepo.create({
-          messageId: event.messageId,
+          messageId: event.eventId,
           eventType: event.eventType,
           handler: 'SalesBillingConsumer',
           status: 'CONSUMED',
@@ -78,6 +81,8 @@ export class RabbitMQConsumer {
         await this.handlePaymentFailed(event);
       } else if (event.eventType === 'order.billed') {
         await this.handleOrderBilled(event);
+      } else if (event.eventType === 'order.shipped') {
+        await this.handleOrderShipped(event);
       } else {
         this.logger.warn(`Unknown billing event: ${event.eventType}`);
       }
@@ -86,23 +91,36 @@ export class RabbitMQConsumer {
 
   private async handlePaymentFailed(event: any) {
     this.logger.warn(
-      `Payment failed → order ${event.orderId} marked PAYMENT_FAILED`,
+      `Payment failed → order ${event.payload.orderId} marked PAYMENT_FAILED`,
     );
     const salesOrderRepo = this.dataSource.getRepository(Order);
 
     await salesOrderRepo.update(
-      { orderId: event.orderId },
+      { orderId: event.payload.orderId },
       { status: 'PAYMENT_FAILED' },
     );
   }
 
   private async handleOrderBilled(event: any) {
-    this.logger.log(`Order billed → order ${event.orderId} marked CONFIRMED`);
+    this.logger.log(
+      `Order billed → order ${event.payload.orderId} marked CONFIRMED`,
+    );
     const salesOrderRepo = this.dataSource.getRepository(Order);
 
     await salesOrderRepo.update(
-      { orderId: event.orderId },
+      { orderId: event.payload.orderId },
       { status: 'BILLED' },
+    );
+  }
+  private async handleOrderShipped(event: any) {
+    this.logger.warn(
+      `ORDER SHIPPED → order ${event.payload.orderId} marked SHIIPED`,
+    );
+    const salesOrderRepo = this.dataSource.getRepository(Order);
+
+    await salesOrderRepo.update(
+      { orderId: event.payload.orderId },
+      { status: 'READY_TO_SHIP' },
     );
   }
 }

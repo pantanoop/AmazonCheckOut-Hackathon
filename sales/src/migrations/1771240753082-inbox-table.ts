@@ -15,7 +15,7 @@ export class InboxTable1771240753081 implements MigrationInterface {
           },
           {
             name: 'messageId',
-            type: 'uuid',
+            type: 'varchar',
             isNullable: false,
           },
           {

@@ -9,11 +9,11 @@ import {
 } from '@nestjs/common';
 import { OrderService } from './order.service';
 
-@Controller('/api/v1/sales/orders')
+@Controller('orders')
 export class OrderController {
   constructor(private readonly orderService: OrderService) {}
   @Post()
-  async placeOrder(
+  async createOrder(
     @Body()
     body: {
       orderId: string;
@@ -22,26 +22,28 @@ export class OrderController {
         productId: string;
         quantity: number;
       }[];
-      orderTotal: number;
-      billingAccountId: string;
     },
   ) {
-    return this.orderService.placeOrder({
+    return this.orderService.createOrder({
       orderId: body.orderId,
       customerId: body.customerId,
       products: body.products.map((p) => ({
         productId: p.productId,
         quantity: p.quantity,
       })),
-      orderTotal: body.orderTotal,
-      billingAccountId: body.billingAccountId,
     });
   }
 
-  // @Patch(':id/place')
-  // async placeOrder(@Param('id') orderId: string) {
-  //   return this.orderService.placeOrder(orderId);
-  // }
+  @Patch(':id/placeOrder')
+  async placeOrder(@Param('id') orderId: string) {
+    return this.orderService.placeOrder(orderId);
+  }
+
+  @Get('seed')
+  seedProductInformation() {
+    console.log('/sales product/seed HIT');
+    return this.orderService.seedProductInformation();
+  }
 
   @Get()
   async getOrders(

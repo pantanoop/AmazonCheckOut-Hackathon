@@ -30,7 +30,7 @@ export class OutboxProcessor {
           this.logger.log(`Publishing message ${message.id}`);
 
           await this.publisher.publish({
-            eventId: message.id,
+            eventId: message.messageId,
             eventType: message.eventType,
             payload: message.messagePayload,
           });

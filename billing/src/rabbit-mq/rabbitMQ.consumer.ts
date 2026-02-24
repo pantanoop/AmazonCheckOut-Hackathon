@@ -3,7 +3,7 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { RabbitMQConnection } from './rabbitMQ.connection';
 import { DataSource } from 'typeorm';
 import { InboxMessage } from '../inbox/inbox.entity';
-import { Order } from '../billing/entities/order.entity';
+import { Order } from '../order/entities/order.entity';
 import { OutboxMessage } from '../outbox/entities/outbox-table.entity';
 import { BillingAccount } from '../billing/entities/billing-account.entity';
 
@@ -57,11 +57,9 @@ export class RabbitMQConsumer implements OnModuleInit {
     payload: {
       orderId: string;
       orderTotal: number;
-      billingAccountId: string;
     };
   }) {
     const { eventId, eventType, payload } = event;
-    const channel = await this.rabbit.getChannel(process.env.RABBITMQ_URL!);
 
     await this.dataSource.transaction(async (manager) => {
       const inboxRepo = manager.getRepository(InboxMessage);
@@ -70,7 +68,7 @@ export class RabbitMQConsumer implements OnModuleInit {
       const accountRepo = manager.getRepository(BillingAccount);
 
       const alreadyProcessed = await inboxRepo.findOne({
-        where: { messageId: eventId },
+        where: { messageId: eventId, eventType: event.eventType },
       });
 
       if (alreadyProcessed) {
@@ -80,20 +78,24 @@ export class RabbitMQConsumer implements OnModuleInit {
       const inbox = inboxRepo.create({
         messageId: eventId,
         eventType,
-        handler: 'handleMessageConsumer',
+        handler: 'BillingConsumer',
         status: 'CONSUMED',
       });
 
       await inboxRepo.save(inbox);
+      const order = await orderRepo.findOne({
+        where: { orderId: payload.orderId },
+      });
+      const accountID = order?.billingAccountId;
 
       const billingAccount = await accountRepo.findOne({
-        where: { billingAccountId: payload.billingAccountId },
+        where: { billingAccountId: accountID },
       });
 
       if (!billingAccount || payload.orderTotal > billingAccount.balance) {
         await outboxRepo.save(
           outboxRepo.create({
-            id: eventId,
+            messageId: eventId,
             eventType: 'payment.failed',
             status: 'PENDING',
             messagePayload: {
@@ -105,16 +107,9 @@ export class RabbitMQConsumer implements OnModuleInit {
         );
         return;
       } else {
-        const order = orderRepo.create({
-          orderId: payload.orderId,
-          billingAccountId: payload.billingAccountId,
-        });
-
-        await orderRepo.save(order);
-
         await outboxRepo.save(
           outboxRepo.create({
-            id: eventId,
+            messageId: eventId,
             eventType: 'order.billed',
             status: 'PENDING',
             messagePayload: {

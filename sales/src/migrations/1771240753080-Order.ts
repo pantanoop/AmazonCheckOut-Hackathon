@@ -17,15 +17,15 @@ export class OrderTable1771240753080 implements MigrationInterface {
             isNullable: false,
           },
           {
-            name: 'products',
-            type: 'jsonb',
-            isNullable: false,
-          },
-          {
             name: 'orderTotal',
             type: 'decimal',
             precision: 10,
             scale: 2,
+            isNullable: false,
+          },
+          {
+            name: 'products',
+            type: 'jsonb',
             isNullable: false,
           },
           {

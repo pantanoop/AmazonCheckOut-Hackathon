@@ -18,6 +18,11 @@ export class CreateOrdersTable1771240753083 implements MigrationInterface {
             type: 'uuid',
             isNullable: false,
           },
+          {
+            name: 'billingAddress',
+            type: 'varchar',
+            isNullable: false,
+          },
         ],
       }),
     );

@@ -5,7 +5,7 @@ import { RabbitMQConsumer } from './rabbitMQ.consumer';
 import { RabbitMQPublisher } from './rabbitmq.publisher';
 import { InboxMessage } from '../inbox/inbox.entity';
 import { ConsumeCommand } from './commands/consume.command';
-import { Order } from '../billing/entities/order.entity';
+import { Order } from '../order/entities/order.entity';
 import { OutboxMessage } from '../outbox/entities/outbox-table.entity';
 import { BillingAccount } from '../billing/entities/billing-account.entity';
 

@@ -5,7 +5,7 @@ import { join } from 'path';
 import { BillingAccount } from '../billing/entities/billing-account.entity';
 import { InboxMessage } from '../inbox/inbox.entity';
 import { OutboxMessage } from '../outbox/entities/outbox-table.entity';
-import { Order } from '../billing/entities/order.entity';
+import { Order } from '../order/entities/order.entity';
 
 dotenv.config();
 
@@ -20,8 +20,7 @@ export const typeOrmConfig: DataSourceOptions & SeederOptions = {
 
   entities: [Order, BillingAccount, InboxMessage, OutboxMessage],
 
-  migrations: [join(__dirname, '..', 'src', 'migrations', '*.{ts,js}')],
-
+  migrations: [join(__dirname, '..', 'migrations', '*{.ts,.js}')],
   seeds: [join(__dirname, '..', 'src', 'seeders', '*.seeder.{ts,js}')],
 
   synchronize: false,

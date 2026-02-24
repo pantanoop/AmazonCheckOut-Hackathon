@@ -63,6 +63,25 @@ services:
       DB_DATABASE: billing_db
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
 
+  shipping-service:
+    build:
+      context: ./shipping
+    container_name: shipping-service
+    restart: always
+    depends_on:
+      - postgres
+      - rabbitmq
+    ports:
+      - "4000:4000"
+    environment:
+      PORT: 4000
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_DATABASE: shipping_db
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+
   pgadmin:
     image: dpage/pgadmin4
     container_name: pgadmin

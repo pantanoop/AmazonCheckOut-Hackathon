@@ -5,8 +5,7 @@ export class InboxMessage {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Index({ unique: true })
-  @Column({ type: 'uuid' })
+  @Column()
   messageId: string;
 
   @Column()
