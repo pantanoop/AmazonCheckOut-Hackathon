@@ -1,12 +1,6 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
-import { v4 as uuidv4 } from 'uuid';
 import { Order } from './entities/order.entity';
-import { OutboxMessage } from '../outbox/entities/outbox-table.entity';
 import { BillingAccount } from '../billing/entities/billing-account.entity';
 
 @Injectable()
@@ -16,6 +10,7 @@ export class OrderService {
   async createOrder(input: {
     orderId: string;
     billingAccountId: string;
+    billingAddress: string;
   }): Promise<Order> {
     const orderRepo = this.dataSource.getRepository(Order);
     const existing = await orderRepo.findOne({
@@ -28,6 +23,7 @@ export class OrderService {
     const order = orderRepo.create({
       orderId: input.orderId,
       billingAccountId: input.billingAccountId,
+      billingAddress: input.billingAddress,
     });
 
     return orderRepo.save(order);

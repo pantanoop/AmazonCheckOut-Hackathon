@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-call */
 import { Entity, PrimaryColumn, Column } from 'typeorm';
 
 @Entity('billing_accounts')

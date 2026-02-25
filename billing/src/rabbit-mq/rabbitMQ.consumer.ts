@@ -59,6 +59,10 @@ export class RabbitMQConsumer implements OnModuleInit {
       orderTotal: number;
     };
   }) {
+    this.logger.log(
+      'Received event from RabbitMQ: ' + JSON.stringify(event, null, 2),
+    );
+
     const { eventId, eventType, payload } = event;
 
     await this.dataSource.transaction(async (manager) => {
@@ -92,7 +96,23 @@ export class RabbitMQConsumer implements OnModuleInit {
         where: { billingAccountId: accountID },
       });
 
-      if (!billingAccount || payload.orderTotal > billingAccount.balance) {
+      this.logger.warn(`balance in account: ${billingAccount?.balance}`);
+
+      console.log('balance in account', billingAccount?.balance);
+
+      if (
+        !billingAccount ||
+        Number(payload.orderTotal) > billingAccount.balance
+      ) {
+        this.logger.warn(
+          `balance in account in iff: ${billingAccount?.balance},${payload.orderTotal}`,
+        );
+
+        console.log(
+          'balance in account inn if , otrderTotal',
+          billingAccount?.balance,
+          payload.orderTotal,
+        );
         await outboxRepo.save(
           outboxRepo.create({
             messageId: eventId,

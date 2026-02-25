@@ -55,60 +55,69 @@ export class RabbitMQConsumer implements OnModuleInit {
     eventId: string;
     eventType: string;
     payload: {
-      messageId: string;
       orderId: string;
-      message: string;
     };
   }) {
     const { eventId, eventType, payload } = event;
+
     await this.dataSource.transaction(async (manager) => {
       const inboxRepo = manager.getRepository(InboxMessage);
       const outboxRepo = manager.getRepository(OutboxMessage);
       const orderRepo = manager.getRepository(Order);
 
       const alreadyProcessed = await inboxRepo.findOne({
-        where: { messageId: eventId, eventType: event.eventId },
+        where: { messageId: eventId, eventType },
       });
 
       if (alreadyProcessed) {
-        this.logger.warn(`Duplicate event ignored: ${eventId}`);
+        this.logger.warn(`Duplicate ${eventType} ignored for ${eventId}`);
         return;
       }
 
-      const orderPlaced = await inboxRepo.findOne({
+      const orderPlacedInbox = await inboxRepo.findOne({
         where: { messageId: eventId, eventType: 'order.placed' },
       });
 
-      const inbox = inboxRepo.create({
-        messageId: eventId,
-        eventType,
-        handler: 'ShippingConsumer',
-        status: 'CONSUMED',
-      });
+      await inboxRepo.save(
+        inboxRepo.create({
+          messageId: eventId,
+          eventType,
+          handler: 'ShippingConsumer',
+          status: 'CONSUMED',
+        }),
+      );
 
-      await inboxRepo.save(inbox);
-
-      if (eventType === 'order.billed' && orderPlaced) {
-        const order = orderRepo.create({
-          orderId: payload.orderId,
+      if (eventType === 'order.billed' && orderPlacedInbox) {
+        const order = await orderRepo.findOne({
+          where: { orderId: payload.orderId },
         });
-        order.shippingLabelGenerated = true;
-        await orderRepo.save(order);
+
+        if (!order) {
+          await outboxRepo.save(
+            outboxRepo.create({
+              messageId: eventId,
+              eventType: 'order.cancelled',
+              status: 'PENDING',
+              messagePayload: {
+                orderId: payload.orderId,
+                message: 'order cancelled',
+              },
+            }),
+          );
+          return;
+        }
+
         await outboxRepo.save(
           outboxRepo.create({
             messageId: eventId,
             eventType: 'order.shipped',
             status: 'PENDING',
             messagePayload: {
-              messageId: eventId,
               orderId: payload.orderId,
               message: 'order shipped',
             },
           }),
         );
-        return;
-      } else {
-        return;
       }
     });
   }

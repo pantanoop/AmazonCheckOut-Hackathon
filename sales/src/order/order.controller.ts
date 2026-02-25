@@ -34,7 +34,7 @@ export class OrderController {
     });
   }
 
-  @Patch(':id/placeOrder')
+  @Patch(':id/place')
   async placeOrder(@Param('id') orderId: string) {
     return this.orderService.placeOrder(orderId);
   }

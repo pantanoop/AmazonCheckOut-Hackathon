@@ -7,7 +7,4 @@ export class Order {
 
   @Column()
   shippingAddress: string;
-
-  @Column()
-  shippingLabelGenerated: boolean;
 }

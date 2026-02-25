@@ -29,6 +29,7 @@ export class RabbitMQConsumer {
     await channel.bindQueue(queue.queue, 'ordering.events', 'payment.failed');
     await channel.bindQueue(queue.queue, 'ordering.events', 'order.billed');
     await channel.bindQueue(queue.queue, 'ordering.events', 'order.shipped');
+    await channel.bindQueue(queue.queue, 'ordering.events', 'order.cancelled');
 
     channel.consume(
       queue.queue,
@@ -83,6 +84,8 @@ export class RabbitMQConsumer {
         await this.handleOrderBilled(event);
       } else if (event.eventType === 'order.shipped') {
         await this.handleOrderShipped(event);
+      } else if (event.eventType === 'order.cancelled') {
+        await this.handleOrderCancelled(event);
       } else {
         this.logger.warn(`Unknown billing event: ${event.eventType}`);
       }
@@ -98,6 +101,18 @@ export class RabbitMQConsumer {
     await salesOrderRepo.update(
       { orderId: event.payload.orderId },
       { status: 'PAYMENT_FAILED' },
+    );
+  }
+
+  private async handleOrderCancelled(event: any) {
+    this.logger.warn(
+      `Payment failed → order ${event.payload.orderId} marked PAYMENT_FAILED`,
+    );
+    const salesOrderRepo = this.dataSource.getRepository(Order);
+
+    await salesOrderRepo.update(
+      { orderId: event.payload.orderId },
+      { status: 'ORDER_CANCELLED' },
     );
   }
 

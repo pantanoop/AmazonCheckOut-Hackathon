@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Post } from '@nestjs/common';
 import { OrderService } from './order.service';
 
-@Controller('billing/orders')
+@Controller('api/v1/billing/orders')
 export class OrderController {
   constructor(private readonly orderService: OrderService) {}
   @Post()
@@ -10,11 +10,13 @@ export class OrderController {
     body: {
       orderId: string;
       billingAccountId: string;
+      billingAddress: string;
     },
   ) {
     return this.orderService.createOrder({
       orderId: body.orderId,
       billingAccountId: body.billingAccountId,
+      billingAddress: body.billingAddress,
     });
   }
 

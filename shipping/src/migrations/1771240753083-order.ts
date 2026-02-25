@@ -18,11 +18,6 @@ export class CreateOrdersTable1771240753083 implements MigrationInterface {
             type: 'varchar',
             isNullable: false,
           },
-          {
-            name: 'shippingLabelGenerated',
-            type: 'boolean',
-            default: false,
-          },
         ],
       }),
     );

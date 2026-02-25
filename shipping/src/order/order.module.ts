@@ -4,9 +4,10 @@ import { Order } from './entities/order.entity';
 import { OutboxMessage } from '../outbox/entities/outbox-table.entity';
 import { OrderService } from './order.service';
 import { OrderController } from './order.controller';
+import { Product } from './entities/product.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Order, OutboxMessage])],
+  imports: [TypeOrmModule.forFeature([Order, OutboxMessage, Product])],
   controllers: [OrderController],
   providers: [OrderService],
 })

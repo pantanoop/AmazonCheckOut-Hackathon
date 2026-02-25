@@ -7,4 +7,7 @@ export class Order {
 
   @Column('uuid')
   billingAccountId: string;
+
+  @Column()
+  billingAddress: string;
 }
