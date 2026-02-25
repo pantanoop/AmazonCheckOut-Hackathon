@@ -11,7 +11,7 @@ export class OrdersController {
   async createOrder(@Body() body: any) {
     await Promise.all([
       firstValueFrom(
-        this.http.post('http://sales-service:6000/orders', {
+        this.http.post('http://sales-service:6000/api/v1/sales/orders', {
           orderId: body.orderId,
           customerId: body.customerId,
           products: body.products,

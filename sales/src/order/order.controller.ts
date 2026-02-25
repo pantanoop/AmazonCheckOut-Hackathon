@@ -9,7 +9,7 @@ import {
 } from '@nestjs/common';
 import { OrderService } from './order.service';
 
-@Controller('orders')
+@Controller('api/v1/sales/orders')
 export class OrderController {
   constructor(private readonly orderService: OrderService) {}
   @Post()

@@ -10,7 +10,7 @@ export class CreateOrdersTable1771240753083 implements MigrationInterface {
         columns: [
           {
             name: 'orderId',
-            type: 'uuid',
+            type: 'varchar',
             isPrimary: true,
           },
           {

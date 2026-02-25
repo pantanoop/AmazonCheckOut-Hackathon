@@ -4,7 +4,7 @@ import { OrderService } from './order.service';
 @Controller('api/v1/shipping/orders')
 export class OrderController {
   constructor(private readonly orderService: OrderService) {}
-  @Post('')
+  @Post()
   async createOrder(
     @Body()
     body: {
