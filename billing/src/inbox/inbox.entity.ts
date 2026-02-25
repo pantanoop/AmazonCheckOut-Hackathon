@@ -17,4 +17,5 @@ export class InboxMessage {
 
   @Column()
   handler: string;
+
 }

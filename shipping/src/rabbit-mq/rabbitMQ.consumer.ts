@@ -104,6 +104,18 @@ export class RabbitMQConsumer implements OnModuleInit {
               },
             }),
           );
+         
+          await outboxRepo.save(
+            outboxRepo.create({
+              messageId: eventId,
+              eventType: 'order.refund',
+              status: 'PENDING',
+              messagePayload: {
+                orderId: payload.orderId,
+                message: 'order refunded',
+              },
+            }),
+          );
           return;
         }
 

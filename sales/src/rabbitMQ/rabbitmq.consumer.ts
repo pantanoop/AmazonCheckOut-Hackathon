@@ -4,7 +4,6 @@ import { RabbitMQConnection } from './rabbitmq.connection';
 import { DataSource } from 'typeorm';
 import { InboxMessage } from '../inbox/inbox.entity';
 import { Order } from '../order/entities/order.entity';
-import { eventNames } from 'process';
 
 @Injectable()
 export class RabbitMQConsumer {
@@ -106,13 +105,13 @@ export class RabbitMQConsumer {
 
   private async handleOrderCancelled(event: any) {
     this.logger.warn(
-      `Payment failed → order ${event.payload.orderId} marked PAYMENT_FAILED`,
+      `Payment failed → order ${event.payload.orderId} marked ORDER_FAILED`,
     );
     const salesOrderRepo = this.dataSource.getRepository(Order);
 
     await salesOrderRepo.update(
       { orderId: event.payload.orderId },
-      { status: 'ORDER_CANCELLED' },
+      { status: 'CANCELLED' },
     );
   }
 

@@ -23,6 +23,13 @@ export class CreateOrdersTable1771240753083 implements MigrationInterface {
             type: 'varchar',
             isNullable: false,
           },
+          {
+            name: 'billingAmount',
+            type: 'decimal',
+            precision: 10,
+            scale: 2,
+            isNullable: true,
+          },
         ],
       }),
     );

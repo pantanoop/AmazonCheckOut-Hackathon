@@ -10,4 +10,7 @@ export class Order {
 
   @Column()
   billingAddress: string;
+
+  @Column({ type: 'decimal', precision: 10, scale: 2 })
+  billingAmount: number;
 }

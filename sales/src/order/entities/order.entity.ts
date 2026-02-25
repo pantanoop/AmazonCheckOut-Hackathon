@@ -25,7 +25,7 @@ export class Order {
       'PAYMENT_FAILED',
       'BILLED',
       'READY_TO_SHIP',
-      'CANCELED',
+      'CANCELLED',
     ],
     default: 'PENDING',
   })

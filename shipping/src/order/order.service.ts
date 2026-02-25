@@ -11,7 +11,7 @@ export class OrderService {
     orderId: string;
     products: { productId: string; quantity: number }[];
     shippingAddress: string;
-  }): Promise<Order> {
+  }): Promise<Order | null> {
     return await this.dataSource.transaction(async (manager) => {
       const orderRepo = manager.getRepository(Order);
       const productRepo = manager.getRepository(Product);
@@ -27,23 +27,26 @@ export class OrderService {
       for (const item of input.products) {
         const product = await productRepo.findOne({
           where: { productId: item.productId },
-          lock: { mode: 'pessimistic_write' },
+          lock: { mode: 'pessimistic_read' },
         });
 
         if (!product) {
-          throw new BadRequestException(
-            `Product ${item.productId} does not exist`,
-          );
+          return null;
         }
 
         if (product.quantity_on_hand < item.quantity) {
-          throw new BadRequestException(
-            `Insufficient stock for product ${item.productId}`,
-          );
+          return null;
         }
+      }
 
-        product.quantity_on_hand -= item.quantity;
-        await productRepo.save(product);
+      for (const item of input.products) {
+        const product = await productRepo.findOne({
+          where: { productId: item.productId },
+          lock: { mode: 'pessimistic_write' },
+        });
+
+        product!.quantity_on_hand -= item.quantity;
+        await productRepo.save(product!);
       }
 
       const order = orderRepo.create({
