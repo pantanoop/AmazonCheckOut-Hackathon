@@ -6,42 +6,115 @@ import { InboxMessage } from '../inbox/inbox.entity';
 import { Order } from '../order/entities/order.entity';
 
 @Injectable()
-export class RabbitMQConsumer {
+export class RabbitMQConsumer implements OnModuleInit {
   private readonly logger = new Logger(RabbitMQConsumer.name);
+
+  private readonly MAX_IMMEDIATE_RETRIES = Number(
+    process.env.SALES_MAX_IMMEDIATE_RETRIES ?? 5,
+  );
+
+  private readonly MAX_DELAYED_RETRIES = Number(
+    process.env.SALES_MAX_DELAYED_RETRIES ?? 2,
+  );
+
+  private readonly RETRY_TTL_MS = Number(
+    process.env.SALES_RETRY_TTL_MS ?? 30000,
+  );
 
   constructor(
     private readonly rabbit: RabbitMQConnection,
     private readonly dataSource: DataSource,
   ) {}
 
+  async onModuleInit() {
+    await this.start();
+  }
+
   async start() {
     const channel = await this.rabbit.getChannel(process.env.RABBITMQ_URL!);
+
+    await channel.assertQueue('sales.billing.queue', { durable: true });
+
+    await channel.assertQueue('sales.billing.queue.retry', {
+      durable: true,
+      messageTtl: this.RETRY_TTL_MS,
+      deadLetterExchange: '',
+      deadLetterRoutingKey: 'sales.billing.queue',
+    });
+
+    // DLQ
+    await channel.assertQueue('sales.billing.queue.dlq', {
+      durable: true,
+    });
 
     await channel.assertExchange('ordering.events', 'topic', {
       durable: true,
     });
 
-    const queue = await channel.assertQueue('sales.billing.queue', {
-      durable: true,
-    });
+    await channel.bindQueue(
+      'sales.billing.queue',
+      'ordering.events',
+      'payment.failed',
+    );
 
-    await channel.bindQueue(queue.queue, 'ordering.events', 'payment.failed');
-    await channel.bindQueue(queue.queue, 'ordering.events', 'order.billed');
-    await channel.bindQueue(queue.queue, 'ordering.events', 'order.shipped');
-    await channel.bindQueue(queue.queue, 'ordering.events', 'order.cancelled');
+    await channel.bindQueue(
+      'sales.billing.queue',
+      'ordering.events',
+      'order.billed',
+    );
+
+    await channel.bindQueue(
+      'sales.billing.queue',
+      'ordering.events',
+      'order.shipped',
+    );
+
+    await channel.bindQueue(
+      'sales.billing.queue',
+      'ordering.events',
+      'order.cancelled',
+    );
 
     channel.consume(
-      queue.queue,
+      'sales.billing.queue',
       async (msg) => {
         if (!msg) return;
 
+        const event = JSON.parse(msg.content.toString());
+        const retryCount = msg.properties.headers?.['x-retry-count'] ?? 0;
+
         try {
-          const event = JSON.parse(msg.content.toString());
-          await this.handleEvent(event);
+          await this.processWithImmediateRetries(event);
           channel.ack(msg);
-        } catch (error) {
-          this.logger.error('Billing event processing failed', error);
-          channel.nack(msg, false, true);
+        } catch (err) {
+          this.logger.error(`Processing failed for ${event.eventId}`, err);
+
+          channel.ack(msg);
+
+          if (retryCount >= this.MAX_DELAYED_RETRIES) {
+            this.logger.error(
+              `Event ${event.eventId} exceeded delayed retries → DLQ`,
+            );
+
+            channel.sendToQueue(
+              'sales.billing.queue.dlq',
+              Buffer.from(JSON.stringify(event)),
+              { persistent: true },
+            );
+          } else {
+            this.logger.warn(
+              `Retrying ${event.eventId} (retry ${retryCount + 1})`,
+            );
+
+            channel.sendToQueue(
+              'sales.billing.queue.retry',
+              Buffer.from(JSON.stringify(event)),
+              {
+                persistent: true,
+                headers: { 'x-retry-count': retryCount + 1 },
+              },
+            );
+          }
         }
       },
       { noAck: false },
@@ -50,13 +123,30 @@ export class RabbitMQConsumer {
     this.logger.log('Sales billing consumer started');
   }
 
+  private async processWithImmediateRetries(event: any) {
+    for (let attempt = 1; attempt <= this.MAX_IMMEDIATE_RETRIES; attempt++) {
+      try {
+        await this.handleEvent(event);
+        return;
+      } catch (err) {
+        this.logger.warn(
+          `Immediate retry ${attempt}/${this.MAX_IMMEDIATE_RETRIES} failed for ${event.eventId}`,
+        );
+
+        if (attempt === this.MAX_IMMEDIATE_RETRIES) {
+          throw err;
+        }
+      }
+    }
+  }
+
   private async handleEvent(event: {
     eventId: string;
     eventType: string;
     orderId: string;
     message?: string;
+    payload?: any;
   }) {
-    console.log('event in sales consumer', event);
     await this.dataSource.transaction(async (manager) => {
       const inboxRepo = manager.getRepository(InboxMessage);
 
@@ -68,6 +158,7 @@ export class RabbitMQConsumer {
         this.logger.warn(`Duplicate event ignored: ${event.eventId}`);
         return;
       }
+
       await inboxRepo.save(
         inboxRepo.create({
           messageId: event.eventId,
@@ -95,6 +186,7 @@ export class RabbitMQConsumer {
     this.logger.warn(
       `Payment failed → order ${event.payload.orderId} marked PAYMENT_FAILED`,
     );
+
     const salesOrderRepo = this.dataSource.getRepository(Order);
 
     await salesOrderRepo.update(
@@ -107,6 +199,7 @@ export class RabbitMQConsumer {
     this.logger.warn(
       `Payment failed → order ${event.payload.orderId} marked ORDER_FAILED`,
     );
+
     const salesOrderRepo = this.dataSource.getRepository(Order);
 
     await salesOrderRepo.update(
@@ -119,6 +212,7 @@ export class RabbitMQConsumer {
     this.logger.log(
       `Order billed → order ${event.payload.orderId} marked CONFIRMED`,
     );
+
     const salesOrderRepo = this.dataSource.getRepository(Order);
 
     await salesOrderRepo.update(
@@ -126,10 +220,12 @@ export class RabbitMQConsumer {
       { status: 'BILLED' },
     );
   }
+
   private async handleOrderShipped(event: any) {
     this.logger.warn(
       `ORDER SHIPPED → order ${event.payload.orderId} marked SHIIPED`,
     );
+
     const salesOrderRepo = this.dataSource.getRepository(Order);
 
     await salesOrderRepo.update(

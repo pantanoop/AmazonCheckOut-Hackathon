@@ -10,6 +10,18 @@ import { OutboxMessage } from '../outbox/entities/outbox-table.entity';
 export class RabbitMQConsumer implements OnModuleInit {
   private readonly logger = new Logger(RabbitMQConsumer.name);
 
+  private readonly MAX_IMMEDIATE_RETRIES = Number(
+    process.env.SHIPPING_MAX_IMMEDIATE_RETRIES ?? 5,
+  );
+
+  private readonly MAX_DELAYED_RETRIES = Number(
+    process.env.SHIPPING_MAX_DELAYED_RETRIES ?? 2,
+  );
+
+  private readonly RETRY_TTL_MS = Number(
+    process.env.SHIPPING_RETRY_TTL_MS ?? 30000,
+  );
+
   constructor(
     private readonly rabbit: RabbitMQConnection,
     private readonly dataSource: DataSource,
@@ -22,33 +34,96 @@ export class RabbitMQConsumer implements OnModuleInit {
   async start() {
     const channel = await this.rabbit.getChannel(process.env.RABBITMQ_URL!);
 
-    const queue = await channel.assertQueue('shipping.order.queue', {
+    await channel.assertQueue('shipping.order.queue', {
       durable: true,
     });
 
-    await channel.bindQueue(queue.queue, 'ordering.events', 'order.placed');
-    await channel.bindQueue(queue.queue, 'ordering.events', 'order.billed');
+    await channel.assertQueue('shipping.order.queue.retry', {
+      durable: true,
+      messageTtl: this.RETRY_TTL_MS,
+      deadLetterExchange: '',
+      deadLetterRoutingKey: 'shipping.order.queue',
+    });
+
+    await channel.assertQueue('shipping.order.queue.dlq', {
+      durable: true,
+    });
+
+    await channel.bindQueue(
+      'shipping.order.queue',
+      'ordering.events',
+      'order.placed',
+    );
+
+    await channel.bindQueue(
+      'shipping.order.queue',
+      'ordering.events',
+      'order.billed',
+    );
 
     channel.consume(
-      queue.queue,
+      'shipping.order.queue',
       async (msg) => {
         if (!msg) return;
 
+        const event = JSON.parse(msg.content.toString());
+        const retryCount = msg.properties.headers?.['x-retry-count'] ?? 0;
+
         try {
-          const event = JSON.parse(msg.content.toString());
-
-          await this.handleMessage(event);
-
+          await this.processWithImmediateRetries(event);
           channel.ack(msg);
         } catch (err) {
-          this.logger.error('Message processing failed', err);
-          channel.nack(msg, false, true);
+          this.logger.error(`Processing failed for ${event.eventId}`, err);
+
+          channel.ack(msg);
+
+          if (retryCount >= this.MAX_DELAYED_RETRIES) {
+            this.logger.error(
+              `Event ${event.eventId} exceeded delayed retries DLQ`,
+            );
+
+            channel.sendToQueue(
+              'shipping.order.queue.dlq',
+              Buffer.from(JSON.stringify(event)),
+              { persistent: true },
+            );
+          } else {
+            this.logger.warn(
+              `Retrying ${event.eventId} (retry ${retryCount + 1})`,
+            );
+
+            channel.sendToQueue(
+              'shipping.order.queue.retry',
+              Buffer.from(JSON.stringify(event)),
+              {
+                persistent: true,
+                headers: { 'x-retry-count': retryCount + 1 },
+              },
+            );
+          }
         }
       },
       { noAck: false },
     );
 
-    this.logger.log('Billing consumer started');
+    this.logger.log('Shipping consumer started');
+  }
+
+  private async processWithImmediateRetries(event: any) {
+    for (let attempt = 1; attempt <= this.MAX_IMMEDIATE_RETRIES; attempt++) {
+      try {
+        await this.handleMessage(event);
+        return;
+      } catch (err) {
+        this.logger.warn(
+          `Immediate retry ${attempt}/${this.MAX_IMMEDIATE_RETRIES} failed for ${event.eventId}`,
+        );
+
+        if (attempt === this.MAX_IMMEDIATE_RETRIES) {
+          throw err;
+        }
+      }
+    }
   }
 
   private async handleMessage(event: {
@@ -104,7 +179,7 @@ export class RabbitMQConsumer implements OnModuleInit {
               },
             }),
           );
-         
+
           await outboxRepo.save(
             outboxRepo.create({
               messageId: eventId,
